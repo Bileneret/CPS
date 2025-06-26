@@ -59,6 +59,10 @@
    - Збереження прогнозів у `results.txt` і логування в базу через `save_prediction`.
 
 5. **Візуалізація**
+
+<details>
+<summary><strong>Показати код</strong></summary>
+
    ```python
    plt.figure(figsize=(12, 6))
    plt.plot(test['timestamp'], test['temperature'], label='Реальна')
@@ -70,6 +74,7 @@
    plt.grid(True)
    plt.show()
    ```
+</details>
 
 ---
 
@@ -105,6 +110,10 @@ OpenGL дозволяє працювати із справжнім 3D + розр
 **Перехід на OpenGL спростив роботу у 3D, але реалізація руху із паралельним обертом камери - було жахіттям.**
 
 *Код оберту камери:*
+
+<details>
+<summary><strong>Показати код</strong></summary>
+
 ```python
 def get_camera_vectors(yaw, pitch):
     f = np.array([
@@ -119,9 +128,14 @@ def get_camera_vectors(yaw, pitch):
     return f, r, u
 ```
 
+</details>
+
   - Абсолютно такий же векторний спосіб використовуються для реалізації керування камерою у 3D-просторі, обчислюючи вектори напрямку на основі кутів повороту.
 
 *Код для руху у просторі:*
+
+<details>
+<summary><strong>Показати код</strong></summary>
 
 ```python
 if not is_paused:
@@ -141,9 +155,14 @@ if not is_paused:
         camera_pos[1] -= move_speed * dt
 ```
 
+</details>
+
   - Звісно, реалізовано просто, але проблема була у синхронізації повороту камери з рухом прямо. Зараз працює: Куди дивимось, туди і йдемо прямо. Роблячи це у pygame доводилось проектувати камеру у просторі як точку на площину під користувачем і рухати її координати. Звісно, що таким способом поворот камери враховується лише відносно, і натискаючи `W` рух користувача був куди завгодно, але не туди, куди б хотілось.
 
-**2D поверх 3D:**
+**2D повéрх 3D:**
+
+<details>
+<summary><strong>Показати код</strong></summary>
 
 ```python
 def update_menu_texture():
@@ -153,9 +172,15 @@ def update_menu_texture():
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, MENU_W, MENU_H + TAB_H,
                  0, GL_RGBA, GL_UNSIGNED_BYTE, data)
 ```
+
+</details>
+
   - Pygame - це 2D-інструмент, що тут малює меню, яке вже потім передається в OpenGL як текстура.
 
 **Open source GLSL Шейдери:**
+
+<details>
+<summary><strong>Показати код</strong></summary>
 
 ```python
 VERTEX_SHADER_SRC = """
@@ -177,11 +202,90 @@ void main(){
 }
 """
 ```
+</details>
 
   - Старший брат усього проекту на OpenGL. Найпростіше, щоб не використовувати фікс-конвеєр як це було у старих відеоіграх.
 
 Інша величезна частина коду побудована для роботи із аттракторами та фігурами та дуже просить розбиття на ще N файлів, але це вже чисто технічно можна назвати СУПЕР-мікродвигуном для ігор, оскільки вона має деякі риси ігрового движка, такі як рендеринг і управління камерою. Но без фізики, анімації, звуків та скриптів.
 
+---
+
 # ПРАКТИЧНА РОБОТА №5
 ## Завдання: Побудова генетичного алгоритму. Задача комівояжера (Travelling Salesman Problem): Мінімізація відстані, яку потрібно подолати продавцеві, щоб відвідати кожного клієнта точно один раз і повернутися в точку виходу.
 ### Умова: Запрограмувати вирішення обраної задачі за допомогою генетичного алгоритму. Дати можливість обирати кількість та якість початкової популяції чи декількох популяцій. Кількість ітерацій має теж задаватись, включно з опцією “до останнього живого”. Виводити статистику популяцій після кожної ітерації.
+
+## Розбір: 
+
+Початково програма писалась для лабіринту (архів maze.zip), але оскільки сама задача Комівояжера більш призначена для графів - розглянемо архів graf.zip.
+
+- main.py - головний файл програми. Відповідає за введення початкових значень та основний зв'язуючий файл усієї програми.
+- graf.py - генерує зв’язний ненаправлений зважений граф з можливістю змінити ймовірність з'єднання вершин ребрами випадковою вагою (2 < `weight` < 10).
+- graph.py - візуалізатор усієї програми. Малює n-вершинний граф, у якому вершини=клієнти, а ребра=шляхи. Також малює "продавців" і вказує найкращий знайдений шлях минулого покоління.
+- genetic.py - реалізація генетичного алгоритму для задачі комівояжера (TSP).
+
+### Використано: 
+
+**1. Звичайний генетичний алгоритм (Simple Genetic Algorithm): Заснований на базових операціях кросоверу, мутації та вибору**
+Кожне покоління: відбір → кросовер → мутація → нове покоління.
+
+<details>
+<summary><strong>Показати код</strong></summary>
+
+```python
+def simple_genetic_algorithm(graph, pop_size=100, generations=200, mutation_rate=0.1):
+    population = [Seller(graph, mutation_rate) for _ in range(pop_size)]
+    
+    for gen in range(generations):
+        # Оцінка
+        for s in population:
+            s.evaluate_fitness()
+
+        # Відбір: беремо кращу половину
+        population.sort(key=lambda s: s.points, reverse=True)
+        selected = population[:pop_size // 2]
+
+        # Створення нової популяції
+        new_population = []
+        while len(new_population) < pop_size:
+            parent1 = random.choice(selected)
+            parent2 = random.choice(selected)
+            child = parent1.clone(mutate=True, parent2=parent2)
+            new_population.append(child)
+        
+        population = new_population
+        best = max(population, key=lambda s: s.points)
+        print(f"Gen {gen}: best score = {best.points}, dist = {best.distance}")
+```
+</details>
+
+**2. Елітний генетичний алгоритм (Elitist Genetic Algorithm)**  
+Найкращі (елітні) продавці копіюються напряму в наступне покоління.
+
+<details>
+<summary><strong>Показати код</strong></summary>
+
+```python
+def elitist_genetic_algorithm(graph, pop_size=100, generations=200, elite_size=10, mutation_rate=0.1):
+    population = [Seller(graph, mutation_rate) for _ in range(pop_size)]
+
+    for gen in range(generations):
+        for s in population:
+            s.evaluate_fitness()
+
+        population.sort(key=lambda s: s.points, reverse=True)
+        elite = population[:elite_size]
+        selected = population[:pop_size // 2]
+
+        new_population = elite[:]
+        while len(new_population) < pop_size:
+            parent1 = random.choice(selected)
+            parent2 = random.choice(selected)
+            child = parent1.clone(mutate=True, parent2=parent2)
+            new_population.append(child)
+        
+        population = new_population
+        best = max(population, key=lambda s: s.points)
+        print(f"[Elite GA] Gen {gen}: best = {best.points}, dist = {best.distance}")
+ ```
+</details>
+qweqwe
