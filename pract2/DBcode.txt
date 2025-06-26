@@ -1,0 +1,53 @@
+-- Створення бази даних
+DROP DATABASE IF EXISTS electricity_db;
+CREATE DATABASE electricity_db;
+USE electricity_db;
+
+-- Таблиця: загальні налаштування (тарифи, накрутки)
+CREATE TABLE settings (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    setting_key VARCHAR(50) UNIQUE,
+    setting_value FLOAT
+);
+
+-- Початкові значення налаштувань
+INSERT INTO settings (setting_key, setting_value) VALUES
+('day_tariff', 2.4),
+('night_tariff', 1.2),
+('day_fake_increment', 100),
+('night_fake_increment', 80);
+
+-- Таблиця: поточні дані лічильників (з паролем)
+CREATE TABLE meters (
+    meter_id VARCHAR(20) PRIMARY KEY,
+    password VARCHAR(255) NOT NULL,
+    last_update DATETIME,
+    day_value FLOAT,
+    night_value FLOAT
+);
+
+-- Додати тестовий лічильник
+INSERT INTO meters (meter_id, password, last_update, day_value, night_value)
+VALUES ('123', '123123', NOW(), 0, 0);
+
+
+-- Таблиця: історія зчитувань
+CREATE TABLE meter_readings_history (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    meter_id VARCHAR(20),
+    reading_time DATETIME,
+    day_value FLOAT,
+    night_value FLOAT,
+    FOREIGN KEY (meter_id) REFERENCES meters(meter_id) ON DELETE CASCADE
+);
+
+-- Таблиця: історія рахунків
+CREATE TABLE bills (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    meter_id VARCHAR(20),
+    bill_time DATETIME,
+    day_kwh_used FLOAT,
+    night_kwh_used FLOAT,
+    total_cost FLOAT,
+    FOREIGN KEY (meter_id) REFERENCES meters(meter_id) ON DELETE CASCADE
+);
