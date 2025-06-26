@@ -161,9 +161,6 @@ if not is_paused:
 
 **2D повéрх 3D:**
 
-<details>
-<summary><strong>Показати код</strong></summary>
-
 ```python
 def update_menu_texture():
     flipped = pygame.transform.flip(menu_surface, False, True)
@@ -172,8 +169,6 @@ def update_menu_texture():
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, MENU_W, MENU_H + TAB_H,
                  0, GL_RGBA, GL_UNSIGNED_BYTE, data)
 ```
-
-</details>
 
   - Pygame - це 2D-інструмент, що тут малює меню, яке вже потім передається в OpenGL як текстура.
 
@@ -228,64 +223,171 @@ void main(){
 **1. Звичайний генетичний алгоритм (Simple Genetic Algorithm): Заснований на базових операціях кросоверу, мутації та вибору**
 Кожне покоління: відбір → кросовер → мутація → нове покоління.
 
-<details>
-<summary><strong>Показати код</strong></summary>
-
 ```python
-def simple_genetic_algorithm(graph, pop_size=100, generations=200, mutation_rate=0.1):
-    population = [Seller(graph, mutation_rate) for _ in range(pop_size)]
-    
-    for gen in range(generations):
-        # Оцінка
-        for s in population:
-            s.evaluate_fitness()
+# в блоці побудови нового покоління:
+for _ in range(self.pop_size - self.elite_size):
+    parent1 = random.choice(elite)
+    parent2 = random.choice(elite)
+    # у clone() відбувається і кросовер (часткове схрещення з parent2), і мутація
+    new_pop.append(parent1.clone(mutate=True, parent2=parent2))
 
-        # Відбір: беремо кращу половину
-        population.sort(key=lambda s: s.points, reverse=True)
-        selected = population[:pop_size // 2]
-
-        # Створення нової популяції
-        new_population = []
-        while len(new_population) < pop_size:
-            parent1 = random.choice(selected)
-            parent2 = random.choice(selected)
-            child = parent1.clone(mutate=True, parent2=parent2)
-            new_population.append(child)
-        
-        population = new_population
-        best = max(population, key=lambda s: s.points)
-        print(f"Gen {gen}: best score = {best.points}, dist = {best.distance}")
 ```
-</details>
 
 **2. Елітний генетичний алгоритм (Elitist Genetic Algorithm)**  
 Найкращі (елітні) продавці копіюються напряму в наступне покоління.
 
-<details>
-<summary><strong>Показати код</strong></summary>
+```python
+# після оцінки фітнесу, сортування за points:
+elite = sorted(self.population, key=lambda s: s.points, reverse=True)[:self.elite_size]
+# напряму копіюємо цих “елітних” у нову популяцію
+new_pop.extend(elite)
+ ```
+
+
+**3. Паралельний генетичний алгоритм (Parallel Genetic Algorithm)**  
+fitnes кожного продавця обчислюється паралельно (через 'multiprocessing.Pool'), що Це значно пришвидшує обчислення для великих популяцій. Але, звісно, популяція у 1000 осіб - занадто 🥲.
 
 ```python
-def elitist_genetic_algorithm(graph, pop_size=100, generations=200, elite_size=10, mutation_rate=0.1):
-    population = [Seller(graph, mutation_rate) for _ in range(pop_size)]
+# створюємо пул процесів
+self.pool = Pool(cpu_count())
 
-    for gen in range(generations):
-        for s in population:
-            s.evaluate_fitness()
+# у тренувальному циклі — одночасно викликаємо evaluate_seller для всієї population
+self.population = self.pool.map(evaluate_seller, self.population)
 
-        population.sort(key=lambda s: s.points, reverse=True)
-        elite = population[:elite_size]
-        selected = population[:pop_size // 2]
+# по завершенню тренування закриваємо пул
+self.pool.close()
+self.pool.join()
+```
 
-        new_population = elite[:]
-        while len(new_population) < pop_size:
-            parent1 = random.choice(selected)
-            parent2 = random.choice(selected)
-            child = parent1.clone(mutate=True, parent2=parent2)
-            new_population.append(child)
-        
-        population = new_population
-        best = max(population, key=lambda s: s.points)
-        print(f"[Elite GA] Gen {gen}: best = {best.points}, dist = {best.distance}")
- ```
+### Обов'язкові етапи
+##### Все показано у кодах нижче:
+
+<details>
+<summary><strong>GeneticTSP</strong></summary>
+
+```python
+class GeneticTSP:
+    def __init__(…):
+        # 1) Ініціалізація популяції
+        # Створюємо початкову популяцію випадкових маршрутів
+        self.population = self._initialize_population(loaded_genome)
+
+    def _initialize_population(self, loaded_genome):
+        """1) Ініціалізація популяції: повертає список Seller’ів."""
+        population = []
+        if loaded_genome and self._is_valid_genome(loaded_genome):
+            population.append(Seller(..., genome=loaded_genome))
+        while len(population) < self.pop_size:
+            population.append(Seller(self.graf, self.mutation_rate))
+        return population
+
+    def train(self):
+        def loop():
+            for gen in range(1, self.generations + 1):
+                # 2) Оцінка придатності (fitness evaluation)
+                self._evaluate_population()
+
+                # 7) Умова зупинки
+                if self._check_termination():
+                    break
+
+                # 3) Вибір батьків
+                elite, selected = self._select_parents()
+
+                # 4) Створення нащадків
+                new_offspring = self._crossover_and_mutate(elite)
+
+                # 6) Вибір для наступної популяції (елітність + нащадки)
+                self._form_next_population(elite, new_offspring)
+
+            # 8) Вивід результатів
+            return self.get_best()
+
+        threading.Thread(target=loop, daemon=True).start()
+
+
+    def _evaluate_population(self):
+        """2) Оцінка придатності: паралельно рахуємо fitness кожного."""
+        self.population = self.pool.map(evaluate_seller, self.population)
+
+
+    def _check_termination(self):
+        """7) Умова зупинки: досягли оптимуму чи пройшли всі покоління."""
+        return any(self._compare_paths(s.path, self.optimal_path)
+                   for s in [self.best_by_distance]) \
+               or gen >= self.generations
+
+
+    def _select_parents(self):
+        """3) Вибір батьків: турнір/рулетка/елітний відбір."""
+        # еліта
+        elite = sorted(self.population, key=lambda s: s.points, reverse=True)[:self.elite_size]
+        # інша селекція (наприклад, турнір)
+        selected = random.choices(elite, k=self.pop_size // 2)
+        return elite, selected
+
+
+    def _crossover_and_mutate(self, parents):
+        """4) Створення нащадків: кросовер + мутація."""
+        offspring = []
+        for _ in range(self.pop_size - self.elite_size):
+            p1, p2 = random.sample(parents, 2)
+            child = p1.clone(mutate=True, parent2=p2)
+            offspring.append(child)
+        return offspring
+
+
+    def _form_next_population(self, elite, offspring):
+        """6) Формуємо наступну популяцію: еліта + нові нащадки."""
+        self.population = elite + offspring
+```
+
 </details>
-qweqwe
+
+<details>
+<summary><strong>Seller</strong></summary>
+
+```python
+class Seller:
+    def __init__(…):
+        self.genome = self._initialize_genome()   # 1) Ініціалізація однієї особини
+
+    def _initialize_genome(self):
+        """Генерує випадковий валідний маршрут."""
+
+    def evaluate_fitness(self):
+        """2 & 5) Оцінка придатності поточної особини."""
+        # рахує distance, points, штрафи, повертає points
+
+    def move(self):
+        """Частина етапу 4: просуває особину по маршруту для анімації."""
+```
+
+</details>
+
+--- 
+
+# ПРАКТИЧНА РОБОТА №6
+## Завдання: Клітинні автомати. Модель лісової пожежі.
+### Умова: Розробити модель епідемії або лісової пожежі за допомогою клітинних автоматів. Навчитися програмувати та візуалізувати динамічні процеси у складних системах.
+### Модель лісової пожежі:
+   - Клітини: 
+      - Кожна клітина може бути в одному з трьох станів: 
+
+         - незаймана (T)
+         - горить (B)
+         - згоріла (E).
+   - Правила переходу:
+      - Незаймана клітина може загорітися, якщо поруч з нею є клітини, що горять.
+      - Горюча клітина з часом стає згорілою.
+      - Згоріла клітина більше не може змінювати свій стан.
+
+   - Параметри:
+      - Ймовірність загоряння для незайманої клітини (P_burn).
+      - Час горіння клітини (T_burn).
+
+## [Коди завдання](pract6)
+
+## Розбір:
+
+main.py - головний файл із виконанням завдання. 
