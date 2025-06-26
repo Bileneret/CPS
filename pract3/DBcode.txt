@@ -1,0 +1,52 @@
+-- Створення бази даних
+DROP DATABASE IF EXISTS weather_data;
+CREATE DATABASE weather_data;
+USE weather_data;
+
+-- Створення таблиці weather_data
+CREATE TABLE weather_data (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    timestamp DATETIME NOT NULL,
+    temperature FLOAT,
+    precipitation FLOAT,
+    humidity FLOAT,
+    snowfall FLOAT,
+    snow_depth FLOAT,
+    wind_gust FLOAT,
+    wind_speed_10m FLOAT,
+    wind_direction_10m FLOAT,
+    wind_speed_100m FLOAT,
+    wind_direction_100m FLOAT,
+    cloud_cover_total FLOAT,
+    cloud_cover_high FLOAT,
+    cloud_cover_medium FLOAT,
+    cloud_cover_low FLOAT,
+    pressure FLOAT,
+    UNIQUE INDEX idx_timestamp (timestamp) -- Додаємо унікальний індекс для уникнення дублювання
+);
+
+-- Створення таблиці predictions із усіма колонками для прогнозів
+CREATE TABLE IF NOT EXISTS predictions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    forecast_date DATETIME NOT NULL,
+    predicted_temperature FLOAT,
+    predicted_gdd FLOAT, -- Growing Degree Days
+    predicted_precipitation FLOAT,
+    predicted_humidity FLOAT,
+    predicted_snowfall FLOAT,
+    predicted_snow_depth FLOAT,
+    predicted_wind_gust FLOAT,
+    predicted_wind_speed_10m FLOAT,
+    predicted_wind_direction_10m FLOAT,
+    predicted_wind_speed_100m FLOAT,
+    predicted_wind_direction_100m FLOAT,
+    predicted_cloud_cover_total FLOAT,
+    predicted_cloud_cover_high FLOAT,
+    predicted_cloud_cover_medium FLOAT,
+    predicted_cloud_cover_low FLOAT,
+    predicted_pressure FLOAT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- (Опціонально) Додавання індексу для forecast_date, якщо потрібно
+CREATE INDEX idx_forecast_date ON predictions (forecast_date);
